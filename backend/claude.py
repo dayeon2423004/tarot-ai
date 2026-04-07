@@ -1,4 +1,5 @@
 from tools import TOOLS
+from flask import jsonify
 
 # 1. system prompt
 SYSTEM_PROMPT = """
@@ -38,17 +39,41 @@ SYSTEM_PROMPT = """
 
 # 절차
 def ask_llm(message, user_id):
-    # Context
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": message}
-    ]
-
     # LLM 호출
-    response = client.chat.completions.create(
+    response = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=1000,
         system=SYSTEM_PROMPT,
-        messages=messages
+        messages=[{"role": "user", "content": message}]
         tools=TOOLS
+    )
+
+    # tool_use / text 판별
+    content = response.content[0]
+
+    if content.type == "text":
+        return jsonify({"message" : content.text})
+    # tool 호출 시
+    elif content.type == "tool_use":
+        tool_name = content.name
+        tool_input = content.input
+
+        # MCP 호출 
+        result = call_tool(tool_name, tool_input, user_id)
+
+        # user 질문 + llmtool 값 -> LLM 호출 
+        response2 = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1000,
+            system=SYSTEM_PROMPT,
+            messages=[
+                {"role": "user", "content": message}, 
+                content,
+                {
+                    "role" : "tool",
+                    
+                } 
+            ]
+
+        return jsonify({"message": response2})
     )
