@@ -8,6 +8,7 @@ import jwt_utils
 
 load_dotenv()  # .env 파일 읽기
 
+# db 정보
 def get_db():
     return pymysql.connect(
         host=os.getenv('MYSQL_HOST'),
