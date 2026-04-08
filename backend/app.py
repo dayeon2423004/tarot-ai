@@ -1,4 +1,4 @@
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from auth import register, login
 from jwt_utils import check_auth
 from claude import ask_llm
@@ -22,8 +22,9 @@ def chat_route():
     
     user_id = user["user_id"]
     message = request.json.get("message")
+    result = ask_llm(message, user_id)
 
-    return ask_llm(message, user_id)
+    return jsonify({"message": result["text"], "image_url": result["image_url"]})
 
 
 if __name__ == '__main__':
