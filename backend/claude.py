@@ -1,5 +1,7 @@
 from tools import TOOLS
-from flask import jsonify
+from call_tool import call_tool
+import os
+from anthropic import Anthropic
 
 # 1. system prompt
 SYSTEM_PROMPT = """
@@ -27,7 +29,8 @@ SYSTEM_PROMPT = """
     - 짧고 의미 있는 문장
     - 너무 길게 말하지 않음
 
-    타로 해석 시:
+    타로 해석 및 카드 뽑은 후:
+    - 역방향인지, 정방향 중 한가지를 골라 그에 대해 설명한다. 
     - 카드의 의미를 상황에 맞게 자연스럽게 풀어 설명한다
     - 단정적인 미래 예측은 피한다
     - 조언 형태로 말한다
@@ -35,45 +38,90 @@ SYSTEM_PROMPT = """
     중요:
     - 필요한 경우에만 tool을 사용한다
     - tool 없이 답할 수 있는 경우는 직접 답한다
+
+    - 사용자의 감정이 포함된 경우 반드시 다음 순서를 따른다:
+        1. save_record tool 호출
+        2. draw_tarot_card tool 호출
+        3. tool 결과를 기반으로 반드시 최종 해석 응답을 생성한다
+
+    - tool을 호출했을 경우, 반드시 tool 결과를 이용해 최종 답변까지 생성해야 한다.
+    - 절대 tool 호출만 하고 응답을 끝내지 않는다.
 """
 
 # 절차
 def ask_llm(message, user_id):
+    client = Anthropic(api_key=os.getenv("MODEL_KEY"))
+
     # LLM 호출
     response = client.messages.create(
-        model="claude-sonnet-4-6",
+        # model="claude-sonnet-4-6",
+        model = "claude-sonnet-4-20250514",
         max_tokens=1000,
         system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": message}]
+        messages=[{"role": "user", "content": message}],
         tools=TOOLS
     )
 
-    # tool_use / text 판별
-    content = response.content[0]
+    # multi tool + tool_use / text 판별
+    tool_results = []
+    text_response = None
+    for item in response.content:
+        if item.type == "text":
+            text_response = item.text
+        
+        elif item.type == "tool_use":
+            result = call_tool(item.name, item.input, user_id)
 
-    if content.type == "text":
-        return jsonify({"message" : content.text})
-    # tool 호출 시
-    elif content.type == "tool_use":
-        tool_name = content.name
-        tool_input = content.input
+            tool_results.append({
+                "tool_use_id" : item.id,
+                "result": result
+            })
 
-        # MCP 호출 
-        result = call_tool(tool_name, tool_input, user_id)
+    # tool 없는 경우
+    if not tool_results:
+        return {
+            "text": text_response,
+            "image_url": None
+        }
+    
+    # LLM 전달할 메세지 저장
+    messages = [
+        {"role": "user", "content": message},
+        {"role": "assistant", "content": response.content}
+    ]
 
-        # user 질문 + llmtool 값 -> LLM 호출 
-        response2 = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1000,
-            system=SYSTEM_PROMPT,
-            messages=[
-                {"role": "user", "content": message}, 
-                content,
+    # tool 메세지
+    for tool in tool_results:
+        messages.append({
+            "role": "user",
+            "content": [
                 {
-                    "role" : "tool",
-                    
-                } 
+                    "type": "tool_result",
+                    "tool_use_id": tool["tool_use_id"],
+                    "content": str(tool["result"])
+                }
             ]
+        })
 
-        return jsonify({"message": response2})
+    # user 질문 + llm 전 요청 값 + tool 값 -> LLM 호출 
+    response2 = client.messages.create(
+        # model="claude-sonnet-4-6",
+        model="claude-sonnet-4-20250514",
+        max_tokens=1000,
+        system=SYSTEM_PROMPT,
+        messages=messages
     )
+
+    # URL 반환
+    image_url = None
+    for tool in tool_results:
+        if tool["result"].get("image_url"):
+            image_url = tool["result"]["image_url"]
+            break
+
+    for item in response2.content:
+
+    return {
+        "text": response2.content[0].text,
+        "image_url": image_url
+    }
