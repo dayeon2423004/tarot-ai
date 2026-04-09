@@ -1,0 +1,55 @@
+<!-- GPT -->
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login</title>
+</head>
+<body>
+    <h2>Login</h2>
+    <input id="username" placeholder="username"><br>
+    <input id="password" type="password" placeholder="password"><br>
+    <button onclick="login()">Login</button>
+
+    <h2>Register</h2>
+    <button onclick="register()">Register</button>
+
+    <script>
+        async function login() {
+            const res = await fetch('/auth/login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    email: document.getElementById('username').value,
+                    password: document.getElementById('password').value
+                })
+            });
+
+            const data = await res.json();
+            console.log(data);
+
+            if (data.token) {
+                localStorage.setItem("token", data.token);
+                alert("로그인 성공!");
+                window.location.href = "/chat.html";
+            } else {
+                alert("로그인 실패");
+            }
+        }
+
+        async function register() {
+            const res = await fetch('/auth/register', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    email: document.getElementById('username').value,
+                    password: document.getElementById('password').value
+                })
+            });
+
+            const data = await res.json();
+            alert(JSON.stringify(data));
+        }
+    </script>
+</body>
+</html>
