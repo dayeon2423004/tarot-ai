@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chat</title>
+</head>
+<body>
+    <h2>Chat</h2>
+
+    <div id="chat-box"></div>
+
+    <input id="message" placeholder="메시지 입력">
+    <button onclick="sendMessage()">보내기</button>
+
+    <script>
+        async function sendMessage() {
+            const token = localStorage.getItem("token");
+
+            const res = await fetch('/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify({
+                    message: document.getElementById('message').value
+                })
+            });
+
+            const data = await res.json();
+
+            const chatBox = document.getElementById('chat-box');
+
+            // 사용자 메시지
+            chatBox.innerHTML += "<p><b>나:</b> " + document.getElementById('message').value + "</p>";
+
+            // AI 응답
+            chatBox.innerHTML += "<p><b>AI:</b> " + data.message + "</p>";
+
+            if (data.image_url) {
+                chatBox.innerHTML += `<img src="${data.image_url}" width="200">`;
+            }
+
+            document.getElementById('message').value = "";
+        }
+    </script>
+</body>
+</html>

@@ -91,17 +91,20 @@ def ask_llm(message, user_id):
     ]
 
     # tool 메세지
-    for tool in tool_results:
-        messages.append({
-            "role": "user",
-            "content": [
-                {
-                    "type": "tool_result",
-                    "tool_use_id": tool["tool_use_id"],
-                    "content": str(tool["result"])
-                }
-            ]
-        })
+    tool_result_contents = [
+        {
+            "type": "tool_result",
+            "tool_use_id": tool["tool_use_id"],
+            "content": str(tool["result"])
+        }
+
+        for tool in tool_results
+    ]
+
+    messages.append({
+        "role": "user",
+        "content": tool_result_contents 
+    })
 
     # user 질문 + llm 전 요청 값 + tool 값 -> LLM 호출 
     response2 = client.messages.create(
@@ -119,9 +122,16 @@ def ask_llm(message, user_id):
             image_url = tool["result"]["image_url"]
             break
 
+    # content에서 text 찾아 메세지 전달
+    final_text = None
     for item in response2.content:
+        if item.type == "text":
+            final_text = item.text
+            break
+        if not final_text:
+            final_text = "응답을 생성하지 못했습니다."
 
     return {
-        "text": response2.content[0].text,
+        "text": final_text,
         "image_url": image_url
     }
